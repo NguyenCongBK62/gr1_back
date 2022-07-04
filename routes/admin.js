@@ -34,5 +34,8 @@ router
   .route("/getlistjob")
   .post((req, res) => adminController.getListJob(req, res));
 router.route("/getjob").post((req, res) => adminController.getJob(req, res));
+router
+  .route("/deletejob")
+  .post((req, res) => adminController.deleteJob(req, res));
 
 module.exports = router;

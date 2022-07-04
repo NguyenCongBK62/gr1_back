@@ -3,6 +3,8 @@ const bcrypt = require("bcrypt-nodejs");
 const JWT = require("jsonwebtoken");
 const jwt_decode = require("jwt-decode");
 const { JWT_SECRET } = require("../configs");
+const pool = require("../configs/databaseConnect");
+const helper = require("../helper/helper");
 const encodedToken = (id) => {
   return JWT.sign(
     {
@@ -15,7 +17,7 @@ const encodedToken = (id) => {
   );
 };
 
-const postJob = (req, res) => {
+const postJob = async (req, res) => {
   const {
     jobtitle,
     salary,
@@ -29,71 +31,254 @@ const postJob = (req, res) => {
     token,
   } = req.body;
   const id = jwt_decode(token).sub;
-  db("job")
-    .insert({
-      companyid: id,
-      jobtitle: jobtitle,
-      salary: salary,
-      worksplace: worksplace,
-      jobdesrciption: jobdesrciption,
-      amount: amount,
-      worktime: worktime,
-    })
-    .returning("*")
-    .then((job) => {
-      languageskill.forEach((l) => {
-        db("languageskill")
-          .returning("*")
-          .insert({
-            name: l,
-          })
-          .then(async (ls) => {
-            await db("joblanguageskill").insert({
-              jobid: job[0].id,
-              languageid: ls[0].id,
-            });
-          });
+  if (req.body.id) {
+    await pool
+      .query(
+        "update job set jobtitle = $1, salary = $2, worksplace = $3, jobdesrciption = $4, amount = $5, worktime = $6 where id = $7",
+        [
+          jobtitle,
+          salary,
+          worksplace,
+          jobdesrciption,
+          amount,
+          worktime,
+          req.body.id,
+        ],
+      )
+      .then((results) => {
+        return;
+      })
+      .catch((err) => {
+        console.log(err);
       });
 
-      techskill.forEach((t) => {
-        db("techskill")
-          .returning("*")
-          .insert({
-            name: t,
-          })
-          .then(async (ts) => {
-            await db("jobtechskill").insert({
-              jobid: job[0].id,
-              techskillid: ts[0].id,
-            });
-          });
+    let oldTechSkillId = (
+      await pool
+        .query(
+          "delete from jobtechskill where jobid = $1 returning techskillid",
+          [req.body.id],
+        )
+        .then((results) => {
+          return results.rows;
+        })
+        .catch((err) => {
+          console.log(err);
+        })
+    ).map((i) => {
+      return i.techskillid;
+    });
+
+    await pool
+      .query(
+        `delete from techskill where id in (${helper.getParamsQuerry(
+          oldTechSkillId,
+        )})`,
+        oldTechSkillId,
+      )
+      .then((results) => {
+        return;
+      })
+      .catch((err) => {
+        console.log(err);
       });
 
-      position.forEach((p) => {
-        db("position")
-          .returning("*")
-          .insert({
-            name: p,
-          })
-          .then(async (jp) => {
-            await db("jobposition").insert({
-              jobid: job[0].id,
-              positionid: jp[0].id,
-            });
-          });
+    let oldLanguageSkillId = (
+      await pool
+        .query(
+          "delete from joblanguageskill where jobid = $1 returning LanguageID",
+          [req.body.id],
+        )
+        .then((results) => {
+          return results.rows;
+        })
+        .catch((err) => {
+          console.log(err);
+        })
+    ).map((i) => {
+      return i.languageid;
+    });
+
+    await pool
+      .query(
+        `delete from languageskill where id in (${helper.getParamsQuerry(
+          oldLanguageSkillId,
+        )})`,
+        oldLanguageSkillId,
+      )
+      .then((results) => {
+        return;
+      })
+      .catch((err) => {
+        console.log(err);
       });
 
-      return res.status(200).json({
-        companyid: job[0].companyid,
-        jobtitle: job[0].jobtitle,
-        salary: job[0].salary,
-        worksplace: job[0].worksplace,
-        jobdesrciption: job[0].jobdesrciption,
-        amount: job[0].amount,
-        imageurl: job[0].imageURL,
+    let oldPositionId = (
+      await pool
+        .query(
+          "delete from jobposition where jobid = $1 returning PositionID",
+          [req.body.id],
+        )
+        .then((results) => {
+          return results.rows;
+        })
+        .catch((err) => {
+          console.log(err);
+        })
+    ).map((i) => {
+      return i.positionid;
+    });
+
+    await pool
+      .query(
+        `delete from position where id in (${helper.getParamsQuerry(
+          oldPositionId,
+        )})`,
+        oldPositionId,
+      )
+      .then((results) => {
+        return;
+      })
+      .catch((err) => {
+        console.log(err);
       });
-    })
-    .catch((err) => console.log(err));
+
+    position.forEach(async (p) => {
+      await pool
+        .query("insert into Position(name) values ($1) returning id", [p])
+        .then(async (results) => {
+          await pool
+            .query(
+              "insert into JobPosition(jobid, positionid) values ($1, $2)",
+              [req.body.id, results.rows[0].id],
+            )
+            .then((results) => {
+              return;
+            })
+            .catch((err) => {
+              console.log(err);
+            });
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+    });
+
+    techskill.forEach(async (t) => {
+      await pool
+        .query("insert into TechSkill(name) values ($1) returning id", [t])
+        .then(async (results) => {
+          await pool
+            .query(
+              "insert into JobTechSkill(jobid, TechSkillID) values ($1, $2)",
+              [req.body.id, results.rows[0].id],
+            )
+            .then((results) => {
+              return;
+            })
+            .catch((err) => {
+              console.log(err);
+            });
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+    });
+
+    languageskill.forEach(async (l) => {
+      await pool
+        .query("insert into LanguageSkill(name) values ($1) returning id", [l])
+        .then(async (results) => {
+          await pool
+            .query(
+              "insert into JobLanguageSkill(jobid, LanguageID) values ($1, $2)",
+              [req.body.id, results.rows[0].id],
+            )
+            .then((results) => {
+              return;
+            })
+            .catch((err) => {
+              console.log(err);
+            });
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+    });
+  } else {
+    let newJobId = await pool
+      .query(
+        "insert into Job(CompanyID, JobTitle, Salary, Worksplace, JobDesrciption, Amount, worktime) values ($1, $2, $3, $4, $5, $6, $7) returning id",
+        [id, jobtitle, salary, worksplace, jobdesrciption, amount, worktime],
+      )
+      .then((results) => {
+        return results.rows[0].id;
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+
+    position.forEach(async (p) => {
+      await pool
+        .query("insert into Position(name) values ($1) returning id", [p])
+        .then(async (results) => {
+          await pool
+            .query(
+              "insert into JobPosition(jobid, positionid) values ($1, $2)",
+              [newJobId, results.rows[0].id],
+            )
+            .then((results) => {
+              return;
+            })
+            .catch((err) => {
+              console.log(err);
+            });
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+    });
+
+    techskill.forEach(async (t) => {
+      await pool
+        .query("insert into TechSkill(name) values ($1) returning id", [t])
+        .then(async (results) => {
+          await pool
+            .query(
+              "insert into JobTechSkill(jobid, TechSkillID) values ($1, $2)",
+              [newJobId, results.rows[0].id],
+            )
+            .then((results) => {
+              return;
+            })
+            .catch((err) => {
+              console.log(err);
+            });
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+    });
+    languageskill.forEach(async (l) => {
+      await pool
+        .query("insert into LanguageSkill(name) values ($1) returning id", [l])
+        .then(async (results) => {
+          await pool
+            .query(
+              "insert into JobLanguageSkill(jobid, LanguageID) values ($1, $2)",
+              [newJobId, results.rows[0].id],
+            )
+            .then((results) => {
+              return;
+            })
+            .catch((err) => {
+              console.log(err);
+            });
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+    });
+  }
 };
 
 const signIn = async (req, res, next) => {
@@ -136,216 +321,290 @@ const updateCompanyProfile = async (req, res, next) => {
     worktimestart,
     token,
   } = req.body;
-  console.log(req.body);
   const id = jwt_decode(token).sub;
-  let companyProfile1 = await db("companycv")
-    .insert({
-      id: id,
-      address: address,
-      description: description,
-      field: field,
-      logo: logo,
-      memberquantity: memberquantity,
-      name: name,
-      slogan: slogan,
-      timeot: timeot,
-      worktimeend: worktimeend,
-      worktimestart: worktimestart,
+  let companyProfile = [];
+  let oldProfile = await pool
+    .query("select * from companycv where id = $1", [id])
+    .then((data) => {
+      return data.rows;
     })
-    .returning("*");
-  return res.status(200).json({
-    id: companyProfile1[0].id,
-    address: companyProfile1[0].address,
-    description: companyProfile1[0].description,
-    field: companyProfile1[0].field,
-    logo: companyProfile1[0].logo,
-    memberquantity: companyProfile1[0].memberquantity,
-    name: companyProfile1[0].name,
-    slogan: companyProfile1[0].slogan,
-    timeot: companyProfile1[0].timeot,
-    worktimeend: companyProfile1[0].worktimeend,
-    worktimestart: companyProfile1[0].worktimestart,
-  });
+    .catch((err) => {
+      console.log(err);
+    });
+  if (oldProfile.length > 0) {
+    companyProfile = await pool
+      .query(
+        "update companycv set name = $1, address = $2, field = $3, description = $4, memberquantity = $5, worktimestart = $6, worktimeend = $7, slogan = $8, logo = $9, timeot = $10 where id = $11",
+        [
+          name,
+          address,
+          field,
+          description,
+          memberquantity,
+          worktimestart,
+          worktimeend,
+          slogan,
+          logo,
+          timeot,
+          id,
+        ],
+      )
+      .then((data) => {
+        return data.rows;
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+  } else {
+    companyProfile = await pool
+      .query(
+        "insert into companycv (id, name, address, field, description, memberquantity, worktimestart, worktimeend, slogan, logo, timeot) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+        [
+          id,
+          name,
+          address,
+          field,
+          description,
+          memberquantity,
+          worktimestart,
+          worktimeend,
+          slogan,
+          logo,
+          timeot,
+        ],
+      )
+      .then((data) => {
+        return data.rows;
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+  }
+  return res.status(200).json(companyProfile[0]);
 };
 
 const getProfile = async (req, res, next) => {
   const { token } = req.body;
   const id = jwt_decode(token).sub;
-  let companyProfile = await db
-    .select("*")
-    .from("companycv")
-    .where("id", "=", id);
-  return res.status(200).json({
-    id: companyProfile[0].id,
-    address: companyProfile[0].address,
-    description: companyProfile[0].description,
-    field: companyProfile[0].field,
-    logo: companyProfile[0].logo,
-    memberquantity: companyProfile[0].memberquantity,
-    name: companyProfile[0].name,
-    slogan: companyProfile[0].slogan,
-    timeot: companyProfile[0].timeot,
-    worktimeend: companyProfile[0].worktimeend,
-    worktimestart: companyProfile[0].worktimestart,
-  });
+  let companyProfile = await pool
+    .query("select * from companycv where id = $1", [id])
+    .then((data) => {
+      return data.rows;
+    })
+    .catch((err) => {
+      console.log(err);
+    });
+  return res.status(200).json(companyProfile[0]);
 };
 
 const getListJob = async (req, res, next) => {
   const { token } = req.body;
   const id = jwt_decode(token).sub;
-  const listJob = [];
-  let jobs = await db
-    .select("*")
-    .from("job")
-    .where("companyid", "=", id)
-    .then((jobs) => {
-      return jobs;
-    });
-  jobs.forEach(async (j, index) => {
-    let jobTechSkill = await (
-      await db
-        .select("techskillid")
-        .from("jobtechskill")
-        .where("jobid", "=", j.id)
-        .then((skillid) => {
-          return skillid;
-        })
-    ).map((j) => {
-      return j.techskillid;
+  let jobs = await pool
+    .query("select * from job where companyid = $1", [id])
+    .then((data) => {
+      return data.rows;
+    })
+    .catch((err) => {
+      console.log(err);
     });
 
-    let techSkills = await (
-      await db
-        .select("name")
-        .from("techskill")
-        .where("id", "in", jobTechSkill)
-        .then((skill) => {
-          return skill;
+  jobs = await Promise.all(
+    jobs.map(async (job) => {
+      let jobTechSkill = await pool
+        .query(
+          "select name from techskill where id in (select techskillid from job, jobtechskill where job.id = jobtechskill.jobid and job.id = $1 )",
+          [job.id],
+        )
+        .then((data) => {
+          return data.rows;
         })
-    ).map((s) => {
-      return s.name;
-    });
+        .catch((err) => {
+          console.log(err);
+        });
+      let jobLanguageSkill = await pool
+        .query(
+          "select name from languageskill where id in (select languageid from job, joblanguageskill where job.id = joblanguageskill.jobid and job.id = $1 )",
+          [job.id],
+        )
+        .then((data) => {
+          return data.rows;
+        })
+        .catch((err) => {
+          console.log(err);
+        });
 
-    let jobLanguageSkill = await (
-      await db
-        .select("languageid")
-        .from("joblanguageskill")
-        .where("jobid", "=", j.id)
-        .then((skillid) => {
-          return skillid;
-        })
-    ).map((j) => {
-      return j.languageid;
-    });
-
-    let languageSkills = await (
-      await db
-        .select("name")
-        .from("languageskill")
-        .where("id", "in", jobLanguageSkill)
-        .then((skill) => {
-          return skill;
-        })
-    ).map((s) => {
-      return s.name;
-    });
-    j.techSkills = techSkills;
-    j.anguageSkills = languageSkills;
-    j.id = j.id;
-    listJob[index] = j;
-    if (index === jobs.length - 1) {
-      return res.status(200).json(listJob);
-    }
-  });
+      job.techSkills = jobTechSkill.map((j) => {
+        return j.name;
+      });
+      job.languageSkills = jobLanguageSkill.map((j) => {
+        return j.name;
+      });
+      return job;
+    }),
+  );
+  return res.status(200).json(jobs);
 };
 
 const getJob = async (req, res, next) => {
-  const { token, id } = req.body;
-  let job = await db
-    .select("*")
-    .from("job")
-    .where("id", "=", id)
-    .then((jobs) => {
-      return jobs;
+  const { id } = req.body;
+  let job = await pool
+    .query("select * from job where id = $1", [id])
+    .then((data) => {
+      return data.rows;
+    })
+    .catch((err) => {
+      console.log(err);
     });
 
-  let jobTechSkills = (
-    await db
-      .select("techskillid")
-      .from("jobtechskill")
-      .where("jobid", "=", job[0].id)
-      .then((skillid) => {
-        return skillid;
-      })
-  ).map((j) => {
-    return j.techskillid;
-  });
+  let jobTechSkill = await pool
+    .query(
+      "select name from techskill where id in (select techskillid from job, jobtechskill where job.id = jobtechskill.jobid and job.id = $1 )",
+      [job[0].id],
+    )
+    .then((data) => {
+      return data.rows;
+    })
+    .catch((err) => {
+      console.log(err);
+    });
 
-  let techSkills = (
-    await db
-      .select("name")
-      .from("techskill")
-      .where("id", "in", jobTechSkills)
-      .then((skill) => {
-        return skill;
-      })
-  ).map((t) => {
-    return t.name;
-  });
+  let jobLanguageSkill = await pool
+    .query(
+      "select name from languageskill where id in (select languageid from job, joblanguageskill where job.id = joblanguageskill.jobid and job.id = $1 )",
+      [job[0].id],
+    )
+    .then((data) => {
+      return data.rows;
+    })
+    .catch((err) => {
+      console.log(err);
+    });
 
-  let jobLanguageSkill = (
-    await db
-      .select("languageid")
-      .from("joblanguageskill")
-      .where("jobid", "=", job[0].id)
-      .then((skillid) => {
-        return skillid;
-      })
-  ).map((j) => {
-    return j.languageid;
-  });
+  let jobPositon = await pool
+    .query(
+      "select name from position where id in (select positionid from job, jobposition where job.id = jobposition.jobid and job.id = $1 )",
+      [job[0].id],
+    )
+    .then((data) => {
+      return data.rows;
+    })
+    .catch((err) => {
+      console.log(err);
+    });
+  let techSkills = jobTechSkill.map((techSkill) => techSkill.name);
+  let languageSkills = jobLanguageSkill.map(
+    (languageSkill) => languageSkill.name,
+  );
+  let position = jobPositon.map((position) => position.name);
 
-  let languageSkills = (
-    await db
-      .select("name")
-      .from("languageskill")
-      .where("id", "in", jobLanguageSkill)
-      .then((skill) => {
-        return skill;
-      })
-  ).map((t) => {
-    return t.name;
-  });
-
-  let jobPosition = (
-    await db
-      .select("positionid")
-      .from("jobposition")
-      .where("jobid", "=", job[0].id)
-      .then((positionid) => {
-        return positionid;
-      })
-  ).map((j) => {
-    return j.positionid;
-  });
-
-  let position = (
-    await db
-      .select("name")
-      .from("position")
-      .where("id", "in", jobPosition)
-      .then((position) => {
-        return position;
-      })
-  ).map((p) => {
-    return p.name;
-  });
-
-  job[0]["techSkills"] = techSkills;
-  job[0]["languageSkills"] = languageSkills;
-  job[0]["position"] = position;
-  job[0]["id"] = job.id;
+  job[0].techSkills = techSkills;
+  job[0].languageSkills = languageSkills;
+  job[0].position = position;
+  job[0].id = job.id;
   return res.status(200).json(job[0]);
+};
+
+const deleteJob = async (req, res, next) => {
+  const { id } = req.body;
+  let oldTechSkillId = (
+    await pool
+      .query(
+        "delete from jobtechskill where jobid = $1 returning techskillid",
+        [id],
+      )
+      .then((results) => {
+        return results.rows;
+      })
+      .catch((err) => {
+        console.log(err);
+      })
+  ).map((i) => {
+    return i.techskillid;
+  });
+
+  await pool
+    .query(
+      `delete from techskill where id in (${helper.getParamsQuerry(
+        oldTechSkillId,
+      )})`,
+      oldTechSkillId,
+    )
+    .then((results) => {
+      return;
+    })
+    .catch((err) => {
+      console.log(err);
+    });
+
+  let oldLanguageSkillId = (
+    await pool
+      .query(
+        "delete from joblanguageskill where jobid = $1 returning LanguageID",
+        [id],
+      )
+      .then((results) => {
+        return results.rows;
+      })
+      .catch((err) => {
+        console.log(err);
+      })
+  ).map((i) => {
+    return i.languageid;
+  });
+
+  await pool
+    .query(
+      `delete from languageskill where id in (${helper.getParamsQuerry(
+        oldLanguageSkillId,
+      )})`,
+      oldLanguageSkillId,
+    )
+    .then((results) => {
+      return;
+    })
+    .catch((err) => {
+      console.log(err);
+    });
+
+  let oldPositionId = (
+    await pool
+      .query("delete from jobposition where jobid = $1 returning PositionID", [
+        id,
+      ])
+      .then((results) => {
+        return results.rows;
+      })
+      .catch((err) => {
+        console.log(err);
+      })
+  ).map((i) => {
+    return i.positionid;
+  });
+
+  await pool
+    .query(
+      `delete from position where id in (${helper.getParamsQuerry(
+        oldPositionId,
+      )})`,
+      oldPositionId,
+    )
+    .then((results) => {
+      return;
+    })
+    .catch((err) => {
+      console.log(err);
+    });
+
+  await pool
+    .query(`delete from job where id = $1`, [id])
+    .then((results) => {
+      return;
+    })
+    .catch((err) => {
+      console.log(err);
+    });
+  getListJob(req, res, next);
 };
 
 module.exports = {
@@ -355,4 +614,5 @@ module.exports = {
   getProfile,
   getListJob,
   getJob,
+  deleteJob,
 };
