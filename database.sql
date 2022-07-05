@@ -108,17 +108,20 @@ CREATE TABLE CompanyCV (
 );
 
 CREATE TABLE CandidateCV (
-	ID integer NOT NULL,
+	ID serial NOT NULL,
+	CandidateId integer NOT NULL,
 	linkcv text NOT NULL,
+	candidatefullname varchar(255) NOT NULL,
+	phone varchar(255) NOT NULL,
 	CONSTRAINT CandidateCV_pk PRIMARY KEY (id)
 ) WITH (
   OIDS=FALSE
 );
 
-CREATE TABLE AccountCandidateCV (
-	candidatecvid integer NOT NULL,
-	accountid integer NOT NULL,
-	CONSTRAINT AccountCompanyCV_pk PRIMARY KEY (candidatecvid, accountid)
+CREATE TABLE JobCandidateCV (
+	CandidateCVID integer NOT NULL,
+	JobID integer NOT NULL,
+	CONSTRAINT JobCandidateCV_pk PRIMARY KEY (CandidateCVID, JobID)
 ) WITH (
   OIDS=FALSE
 );
@@ -132,6 +135,7 @@ ALTER TABLE JobLanguageSkill ADD CONSTRAINT JobLanguageSkill_fk1 FOREIGN KEY (La
 ALTER TABLE JobPosition ADD CONSTRAINT JobPosition_fk0 FOREIGN KEY (JobID) REFERENCES Job(ID);
 ALTER TABLE JobPosition ADD CONSTRAINT JobPosition_fk1 FOREIGN KEY (PositionID) REFERENCES Position(ID);
 ALTER TABLE CompanyCV ADD CONSTRAINT CompanyCV_fk0 FOREIGN KEY (ID) REFERENCES Account(ID);
-ALTER TABLE CandidateCV ADD CONSTRAINT CandidateCV_fk0 FOREIGN KEY (ID) REFERENCES Account(ID);
-ALTER TABLE AccountCandidateCV ADD CONSTRAINT AccountCandidateCV_fk0 FOREIGN KEY (candidatecvid) REFERENCES CandidateCV(ID);
-ALTER TABLE AccountCandidateCV ADD CONSTRAINT AccountCandidateCV_fk1 FOREIGN KEY (accountid) REFERENCES Account(ID);
+ALTER TABLE CandidateCV ADD CONSTRAINT CandidateCV_fk0 FOREIGN KEY (CandidateId) REFERENCES Account(ID);
+ALTER TABLE JobCandidateCV ADD CONSTRAINT JobCandidateCV_fk0 FOREIGN KEY (CandidateCVID) REFERENCES CandidateCV(ID);
+ALTER TABLE JobCandidateCV ADD CONSTRAINT JobCandidateCV_fk1 FOREIGN KEY (JobID) REFERENCES Job(ID);
+

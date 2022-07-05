@@ -279,6 +279,7 @@ const postJob = async (req, res) => {
         });
     });
   }
+  return res.status(200).json({ status: true });
 };
 
 const signIn = async (req, res, next) => {
@@ -322,6 +323,7 @@ const updateCompanyProfile = async (req, res, next) => {
     token,
   } = req.body;
   const id = jwt_decode(token).sub;
+  console.log(44444, id);
   let companyProfile = [];
   let oldProfile = await pool
     .query("select * from companycv where id = $1", [id])
@@ -607,6 +609,22 @@ const deleteJob = async (req, res, next) => {
   getListJob(req, res, next);
 };
 
+const getListCV = async (req, res, next) => {
+  const { id } = req.body;
+  const listCV = await pool
+    .query(
+      `select * from CandidateCV where id in (slect jobID from JobCandidateCV where jobid = $1)`,
+      [id],
+    )
+    .then((results) => {
+      return results.rows;
+    })
+    .catch((err) => {
+      console.log(err);
+    });
+  return res.status(200).json(listCV);
+};
+
 module.exports = {
   postJob,
   signIn,
@@ -615,4 +633,5 @@ module.exports = {
   getListJob,
   getJob,
   deleteJob,
+  getListCV,
 };

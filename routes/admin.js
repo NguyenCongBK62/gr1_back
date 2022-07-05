@@ -38,4 +38,6 @@ router
   .route("/deletejob")
   .post((req, res) => adminController.deleteJob(req, res));
 
+router.route("/listcv").post((req, res) => adminController.getListCV(req, res));
+
 module.exports = router;
